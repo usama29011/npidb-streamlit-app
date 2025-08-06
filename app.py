@@ -1,0 +1,58 @@
+# app.py
+import streamlit as st
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+import time
+
+st.title("NPIDB Doctor/Physician Scraper")
+
+# Example filter options (you can adjust)
+provider_types = {
+    "Physicians & Surgeons": "C",
+    "Organizations (Health Care)": "O"
+}
+
+states = {
+    "All states": "",
+    **{abbr: abbr for abbr in ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI",
+                               "ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI",
+                               "MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC",
+                               "ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT",
+                               "VT","VA","WA","WV","WI","WY"]}
+}
+
+ptype = st.selectbox("Select provider type", list(provider_types.keys()))
+state = st.selectbox("Select state", list(states.keys()))
+
+if st.button("Scrape"):
+    query_type = provider_types[ptype]
+    state_code = states[state]
+    scraped = []
+    page = 1
+
+    with st.spinner("Scraping..."):
+        while len(scraped) < 5000:
+            url = f"https://npidb.org/search?state={state_code}&taxonomy_description={query_type}&page={page}"
+            resp = requests.get(url)
+            if resp.status_code != 200:
+                st.error(f"Failed to load page {page}")
+                break
+            soup = BeautifulSoup(resp.text, "html.parser")
+            rows = soup.select("table tbody tr")
+            if not rows:
+                break
+            for tr in rows:
+                tds = tr.find_all("td")
+                scraped.append({
+                    "Name": tds[1].get_text(strip=True),
+                    "NPI": tds[0].get_text(strip=True),
+                    "Type": ptype,
+                    "Address": tds[2].get_text(strip=True),
+                    "Phone": tds[3].get_text(strip=True),
+                    "State": state
+                })
+                if len(scraped) >= 5000:
+                    break
+            page += 1
+            time.sleep
